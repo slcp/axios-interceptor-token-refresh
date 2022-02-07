@@ -40,7 +40,7 @@ const updateBearerTokenInterceptor = async (config) => {
         return config
     }
     await refreshAccessTokenIfRequired()
-    return config;
+    return updateBearerToken(config)
 }
 
 
