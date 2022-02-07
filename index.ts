@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from "axios"
+import axios, { Axios, AxiosRequestConfig } from "axios"
 
 const userWillExpire = (): boolean => true
 const userHasExpired = (): boolean => true
@@ -22,24 +22,37 @@ const updateBearerToken = (request: AxiosRequestConfig) => {
 }
 
 let refreshPromise: Promise<void> | undefined;
+const refreshAccessTokenIfRequired = async () => {
+    if (!userHasExpired() && !userWillExpire()) {
+        return
+    }
 
-axios.interceptors.request.use(async (config) => {
+    if (!refreshPromise) {
+        refreshPromise = refreshToken()
+    }
+
+    await refreshPromise
+    refreshPromise = undefined
+}
+
+const updateBearerTokenInterceptor = async (config) => {
     if (!isAuthenticatedRequest(config)) {
         return config
     }
-
-    if (!userHasExpired() && !userWillExpire()) {
-        return config
-    }
-
-    if (userHasExpired() || userWillExpire()) {
-        if (!refreshPromise) {
-            refreshPromise = refreshToken()
-        }
-        await refreshPromise
-        refreshPromise = undefined
-        return updateBearerToken(config)
-    }
-
+    await refreshAccessTokenIfRequired()
     return config;
-}, undefined);
+}
+
+
+export const authorizeRequestInterceptor = async (config: AxiosRequestConfig) => {
+    await refreshAccessTokenIfRequired()
+    return updateBearerToken(config)
+}
+
+export const withAuthorization = (instance: Axios) => {
+    instance.interceptors.request.use(authorizeRequestInterceptor, undefined);
+    return instance;
+}
+
+axios.interceptors.request.use(updateBearerTokenInterceptor, undefined);
+export default axios;
